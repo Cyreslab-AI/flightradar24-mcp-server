@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 
 // Flightradar24 API endpoints
 export const ENDPOINTS = {
@@ -236,7 +236,7 @@ export class Flightradar24ApiClient {
 
   constructor(apiKey: string) {
     if (!apiKey) {
-      throw new McpError(ErrorCode.InvalidParams, ERROR_MESSAGES.MISSING_API_KEY);
+      throw new ProtocolError(ProtocolErrorCode.InvalidParams, ERROR_MESSAGES.MISSING_API_KEY);
     }
 
     this.apiKey = apiKey;
@@ -278,17 +278,17 @@ export class Flightradar24ApiClient {
 
         // Handle authentication errors
         if (axiosError.response?.status === 401) {
-          throw new McpError(ErrorCode.InvalidRequest, ERROR_MESSAGES.INVALID_API_KEY);
+          throw new ProtocolError(ProtocolErrorCode.InvalidRequest, ERROR_MESSAGES.INVALID_API_KEY);
         }
 
         // Handle other API errors
         if (axiosError.response) {
-          throw new McpError(
-            ErrorCode.InternalError,
+          throw new ProtocolError(
+            ProtocolErrorCode.InternalError,
             `${ERROR_MESSAGES.API_ERROR}: ${axiosError.response.status} - ${JSON.stringify(axiosError.response.data)}`
           );
         } else {
-          throw new McpError(ErrorCode.InternalError, ERROR_MESSAGES.NETWORK_ERROR);
+          throw new ProtocolError(ProtocolErrorCode.InternalError, ERROR_MESSAGES.NETWORK_ERROR);
         }
       }
 
@@ -305,8 +305,8 @@ export class Flightradar24ApiClient {
     const response = await this.makeRequest<{ result: FlightDetails }>(endpoint);
 
     if (!response || !response.result) {
-      throw new McpError(
-        ErrorCode.InvalidRequest,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidRequest,
         `No flight data found for flight ID: ${flightId}`
       );
     }
@@ -339,8 +339,8 @@ export class Flightradar24ApiClient {
     const response = await this.makeRequest<{ result: { response: { airport: AirportData } } }>(endpoint, params);
 
     if (!response || !response.result || !response.result.response || !response.result.response.airport) {
-      throw new McpError(
-        ErrorCode.InvalidRequest,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidRequest,
         `No airport data found for airport code: ${airportCode}`
       );
     }
@@ -373,8 +373,8 @@ export class Flightradar24ApiClient {
     const response = await this.makeRequest<{ result: { response: { airline: AirlineData } } }>(endpoint, params);
 
     if (!response || !response.result || !response.result.response || !response.result.response.airline) {
-      throw new McpError(
-        ErrorCode.InvalidRequest,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidRequest,
         `No airline data found for airline code: ${airlineCode}`
       );
     }
@@ -390,8 +390,8 @@ export class Flightradar24ApiClient {
     const response = await this.makeRequest<{ result: { response: { aircraft: AircraftData } } }>(endpoint);
 
     if (!response || !response.result || !response.result.response || !response.result.response.aircraft) {
-      throw new McpError(
-        ErrorCode.InvalidRequest,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidRequest,
         `No aircraft data found for registration: ${registration}`
       );
     }

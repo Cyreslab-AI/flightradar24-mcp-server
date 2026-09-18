@@ -1,4 +1,4 @@
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { Flightradar24ApiClient } from '../api-client.js';
 
 export const aircraftResourceTemplate = {
@@ -16,8 +16,8 @@ export async function getAircraftResource(
     // Extract the aircraft registration from the URI
     const match = uri.match(/^aircraft:\/\/([A-Za-z0-9-]+)$/);
     if (!match) {
-      throw new McpError(
-        ErrorCode.InvalidRequest,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidRequest,
         `Invalid aircraft resource URI: ${uri}`
       );
     }
@@ -26,8 +26,8 @@ export async function getAircraftResource(
 
     // Validate registration
     if (!registration || registration.length < 2) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Invalid aircraft registration number.'
       );
     }
@@ -52,12 +52,12 @@ export async function getAircraftResource(
 
     return JSON.stringify(formattedResponse, null, 2);
   } catch (error) {
-    if (error instanceof McpError) {
+    if (error instanceof ProtocolError) {
       throw error;
     }
 
-    throw new McpError(
-      ErrorCode.InternalError,
+    throw new ProtocolError(
+      ProtocolErrorCode.InternalError,
       `Error retrieving aircraft resource: ${(error as Error).message}`
     );
   }

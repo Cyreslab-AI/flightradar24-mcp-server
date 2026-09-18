@@ -1,16 +1,6 @@
 #!/usr/bin/env node
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ErrorCode,
-  ListResourcesRequestSchema,
-  ListResourceTemplatesRequestSchema,
-  ListToolsRequestSchema,
-  McpError,
-  ReadResourceRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
-
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
+import { Server, ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { Flightradar24ApiClient } from './api-client.js';
 import { getFlightDataTool, getFlightDataToolSchema } from './tools/flight-data.js';
 import { searchFlightsTool, searchFlightsToolSchema } from './tools/flight-search.js';
@@ -56,8 +46,8 @@ class Flightradar24Server {
     if (!this.apiClient) {
       const apiKey = process.env.FLIGHTRADAR24_API_KEY;
       if (!apiKey) {
-        throw new McpError(
-          ErrorCode.InvalidRequest,
+        throw new ProtocolError(
+          ProtocolErrorCode.InvalidRequest,
           'FLIGHTRADAR24_API_KEY environment variable is required'
         );
       }
@@ -68,7 +58,7 @@ class Flightradar24Server {
 
   private setupHandlers() {
     // List available tools
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    this.server.setRequestHandler('tools/list', async (): Promise<any> => ({
       tools: [
         getFlightDataToolSchema,
         searchFlightsToolSchema,
@@ -81,7 +71,7 @@ class Flightradar24Server {
     }));
 
     // Handle tool calls
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.server.setRequestHandler('tools/call', async (request): Promise<any> => {
       const apiClient = this.getApiClient();
 
       switch (request.params.name) {
@@ -107,15 +97,15 @@ class Flightradar24Server {
           return getFlightsInZoneTool(apiClient, request.params.arguments as any);
 
         default:
-          throw new McpError(
-            ErrorCode.MethodNotFound,
+          throw new ProtocolError(
+            ProtocolErrorCode.MethodNotFound,
             `Unknown tool: ${request.params.name}`
           );
       }
     });
 
     // List resource templates
-    this.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
+    this.server.setRequestHandler('resources/templates/list', async () => ({
       resourceTemplates: [
         flightResourceTemplate,
         airportResourceTemplate,
@@ -126,12 +116,12 @@ class Flightradar24Server {
     }));
 
     // List static resources (none in this implementation)
-    this.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+    this.server.setRequestHandler('resources/list', async () => ({
       resources: [],
     }));
 
     // Handle resource requests
-    this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    this.server.setRequestHandler('resources/read', async (request) => {
       const apiClient = this.getApiClient();
       const uri = request.params.uri;
 
@@ -148,8 +138,8 @@ class Flightradar24Server {
       } else if (uri.startsWith('zone://')) {
         content = await getZoneResource(apiClient, uri);
       } else {
-        throw new McpError(
-          ErrorCode.InvalidRequest,
+        throw new ProtocolError(
+          ProtocolErrorCode.InvalidRequest,
           `Unsupported resource URI: ${uri}`
         );
       }

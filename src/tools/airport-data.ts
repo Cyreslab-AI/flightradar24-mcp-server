@@ -1,4 +1,4 @@
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { AirportData, AirportSearchParams, Flightradar24ApiClient } from '../api-client.js';
 
 export const getAirportDataToolSchema = {
@@ -27,8 +27,8 @@ export async function getAirportDataTool(
 
     // Validate airport code
     if (!code || (code.length !== 3 && code.length !== 4)) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Invalid airport code. Must be a 3-letter IATA code or 4-letter ICAO code.'
       );
     }
@@ -48,12 +48,12 @@ export async function getAirportDataTool(
       ],
     };
   } catch (error) {
-    if (error instanceof McpError) {
+    if (error instanceof ProtocolError) {
       throw error;
     }
 
-    throw new McpError(
-      ErrorCode.InternalError,
+    throw new ProtocolError(
+      ProtocolErrorCode.InternalError,
       `Error retrieving airport data: ${(error as Error).message}`
     );
   }
@@ -104,8 +104,8 @@ export async function searchAirportsTool(
   try {
     // Validate that at least one search parameter is provided
     if (!args.name && !args.country && !args.iata && !args.icao) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'At least one search parameter must be provided.'
       );
     }
@@ -156,12 +156,12 @@ export async function searchAirportsTool(
       ],
     };
   } catch (error) {
-    if (error instanceof McpError) {
+    if (error instanceof ProtocolError) {
       throw error;
     }
 
-    throw new McpError(
-      ErrorCode.InternalError,
+    throw new ProtocolError(
+      ProtocolErrorCode.InternalError,
       `Error searching for airports: ${(error as Error).message}`
     );
   }

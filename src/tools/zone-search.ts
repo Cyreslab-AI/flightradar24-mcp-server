@@ -1,4 +1,4 @@
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { FlightData, Flightradar24ApiClient } from '../api-client.js';
 
 export const getFlightsInZoneToolSchema = {
@@ -50,29 +50,29 @@ export async function getFlightsInZoneTool(
 
     // Validate bounds
     if (north < south) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Northern latitude must be greater than or equal to southern latitude.'
       );
     }
 
     if (east < west) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Eastern longitude must be greater than or equal to western longitude.'
       );
     }
 
     if (north > 90 || south < -90) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Latitude must be between -90 and 90 degrees.'
       );
     }
 
     if (east > 180 || west < -180) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Longitude must be between -180 and 180 degrees.'
       );
     }
@@ -124,12 +124,12 @@ export async function getFlightsInZoneTool(
       ],
     };
   } catch (error) {
-    if (error instanceof McpError) {
+    if (error instanceof ProtocolError) {
       throw error;
     }
 
-    throw new McpError(
-      ErrorCode.InternalError,
+    throw new ProtocolError(
+      ProtocolErrorCode.InternalError,
       `Error retrieving flights in zone: ${(error as Error).message}`
     );
   }

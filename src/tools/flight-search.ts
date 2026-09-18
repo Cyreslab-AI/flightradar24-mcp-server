@@ -1,4 +1,4 @@
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { FlightData, FlightSearchParams, Flightradar24ApiClient } from '../api-client.js';
 
 export const searchFlightsToolSchema = {
@@ -101,8 +101,8 @@ export async function searchFlightsTool(
       !args.registration &&
       !args.bounds
     ) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'At least one search parameter must be provided.'
       );
     }
@@ -112,15 +112,15 @@ export async function searchFlightsTool(
       const { north, south, west, east } = args.bounds;
 
       if (north < south) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
+        throw new ProtocolError(
+          ProtocolErrorCode.InvalidParams,
           'Northern latitude must be greater than or equal to southern latitude.'
         );
       }
 
       if (east < west) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
+        throw new ProtocolError(
+          ProtocolErrorCode.InvalidParams,
           'Eastern longitude must be greater than or equal to western longitude.'
         );
       }
@@ -172,12 +172,12 @@ export async function searchFlightsTool(
       ],
     };
   } catch (error) {
-    if (error instanceof McpError) {
+    if (error instanceof ProtocolError) {
       throw error;
     }
 
-    throw new McpError(
-      ErrorCode.InternalError,
+    throw new ProtocolError(
+      ProtocolErrorCode.InternalError,
       `Error searching for flights: ${(error as Error).message}`
     );
   }

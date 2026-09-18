@@ -1,4 +1,4 @@
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { FlightData, Flightradar24ApiClient } from '../api-client.js';
 
 export const zoneResourceTemplate = {
@@ -16,8 +16,8 @@ export async function getZoneResource(
     // Extract the zone bounds from the URI
     const match = uri.match(/^zone:\/\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)$/);
     if (!match) {
-      throw new McpError(
-        ErrorCode.InvalidRequest,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidRequest,
         `Invalid zone resource URI: ${uri}`
       );
     }
@@ -29,36 +29,36 @@ export async function getZoneResource(
 
     // Validate bounds
     if (isNaN(north) || isNaN(south) || isNaN(west) || isNaN(east)) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Invalid zone bounds. All bounds must be valid numbers.'
       );
     }
 
     if (north < south) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Northern latitude must be greater than or equal to southern latitude.'
       );
     }
 
     if (east < west) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Eastern longitude must be greater than or equal to western longitude.'
       );
     }
 
     if (north > 90 || south < -90) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Latitude must be between -90 and 90 degrees.'
       );
     }
 
     if (east > 180 || west < -180) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Longitude must be between -180 and 180 degrees.'
       );
     }
@@ -83,12 +83,12 @@ export async function getZoneResource(
 
     return JSON.stringify(formattedResponse, null, 2);
   } catch (error) {
-    if (error instanceof McpError) {
+    if (error instanceof ProtocolError) {
       throw error;
     }
 
-    throw new McpError(
-      ErrorCode.InternalError,
+    throw new ProtocolError(
+      ProtocolErrorCode.InternalError,
       `Error retrieving zone resource: ${(error as Error).message}`
     );
   }

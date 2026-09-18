@@ -1,4 +1,4 @@
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { AircraftData, Flightradar24ApiClient } from '../api-client.js';
 
 export const getAircraftDataToolSchema = {
@@ -27,8 +27,8 @@ export async function getAircraftDataTool(
 
     // Validate registration
     if (!registration || registration.length < 2) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Invalid aircraft registration number.'
       );
     }
@@ -48,12 +48,12 @@ export async function getAircraftDataTool(
       ],
     };
   } catch (error) {
-    if (error instanceof McpError) {
+    if (error instanceof ProtocolError) {
       throw error;
     }
 
-    throw new McpError(
-      ErrorCode.InternalError,
+    throw new ProtocolError(
+      ProtocolErrorCode.InternalError,
       `Error retrieving aircraft data: ${(error as Error).message}`
     );
   }

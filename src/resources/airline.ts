@@ -1,4 +1,4 @@
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { Flightradar24ApiClient } from '../api-client.js';
 
 export const airlineResourceTemplate = {
@@ -16,8 +16,8 @@ export async function getAirlineResource(
     // Extract the airline code from the URI
     const match = uri.match(/^airline:\/\/([A-Za-z0-9]+)$/);
     if (!match) {
-      throw new McpError(
-        ErrorCode.InvalidRequest,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidRequest,
         `Invalid airline resource URI: ${uri}`
       );
     }
@@ -26,8 +26,8 @@ export async function getAirlineResource(
 
     // Validate airline code
     if (!airlineCode || (airlineCode.length !== 2 && airlineCode.length !== 3)) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Invalid airline code. Must be a 2-letter IATA code or 3-letter ICAO code.'
       );
     }
@@ -48,12 +48,12 @@ export async function getAirlineResource(
 
     return JSON.stringify(formattedResponse, null, 2);
   } catch (error) {
-    if (error instanceof McpError) {
+    if (error instanceof ProtocolError) {
       throw error;
     }
 
-    throw new McpError(
-      ErrorCode.InternalError,
+    throw new ProtocolError(
+      ProtocolErrorCode.InternalError,
       `Error retrieving airline resource: ${(error as Error).message}`
     );
   }

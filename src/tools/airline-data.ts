@@ -1,4 +1,4 @@
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { AirlineData, Flightradar24ApiClient } from '../api-client.js';
 
 export const getAirlineDataToolSchema = {
@@ -27,8 +27,8 @@ export async function getAirlineDataTool(
 
     // Validate airline code
     if (!code || (code.length !== 2 && code.length !== 3)) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Invalid airline code. Must be a 2-letter IATA code or 3-letter ICAO code.'
       );
     }
@@ -48,12 +48,12 @@ export async function getAirlineDataTool(
       ],
     };
   } catch (error) {
-    if (error instanceof McpError) {
+    if (error instanceof ProtocolError) {
       throw error;
     }
 
-    throw new McpError(
-      ErrorCode.InternalError,
+    throw new ProtocolError(
+      ProtocolErrorCode.InternalError,
       `Error retrieving airline data: ${(error as Error).message}`
     );
   }

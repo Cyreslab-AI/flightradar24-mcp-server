@@ -1,4 +1,4 @@
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { Flightradar24ApiClient, FlightDetails } from '../api-client.js';
 
 export const getFlightDataToolSchema = {
@@ -35,8 +35,8 @@ export async function getFlightDataTool(
 
     // Validate that at least one parameter is provided
     if (!flight_iata && !flight_icao) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Either flight_iata or flight_icao must be provided.'
       );
     }
@@ -45,8 +45,8 @@ export async function getFlightDataTool(
     const flightId = flight_icao || flight_iata;
 
     if (!flightId) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
         'Flight identifier is missing or invalid.'
       );
     }
@@ -66,12 +66,12 @@ export async function getFlightDataTool(
       ],
     };
   } catch (error) {
-    if (error instanceof McpError) {
+    if (error instanceof ProtocolError) {
       throw error;
     }
 
-    throw new McpError(
-      ErrorCode.InternalError,
+    throw new ProtocolError(
+      ProtocolErrorCode.InternalError,
       `Error retrieving flight data: ${(error as Error).message}`
     );
   }
