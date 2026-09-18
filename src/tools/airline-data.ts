@@ -1,42 +1,47 @@
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
-import { AirlineData, Flightradar24ApiClient } from '../api-client.js';
+import { AirlineInfo, Flightradar24ApiClient } from '../api-client.js';
 
+// Judgment call: the real FR24 airline endpoint (`/static/airlines/{icao}/light`)
+// only accepts an ICAO code and only returns { icao, iata, name } — there is no
+// IATA-code lookup path and no country/other metadata. The old tool's IATA
+// support and `country` field have been dropped since the real API cannot
+// provide them.
 export const getAirlineDataToolSchema = {
   name: 'get_airline_data',
-  description: 'Get detailed information about an airline by IATA or ICAO code',
+  description: 'Get an airline\'s name and IATA code by its ICAO code.',
   inputSchema: {
     type: 'object',
     properties: {
-      code: {
+      icao: {
         type: 'string',
-        description: 'IATA (2-letter) or ICAO (3-letter) airline code',
+        description: 'ICAO (3-letter) airline code (e.g., \'BAW\' for British Airways). IATA-only lookup is not supported by the FR24 API.',
       },
     },
-    required: ['code'],
+    required: ['icao'],
+  },
+  annotations: {
+    readOnlyHint: true,
+    openWorldHint: true,
   },
 };
 
 export async function getAirlineDataTool(
   apiClient: Flightradar24ApiClient,
   args: {
-    code: string;
+    icao: string;
   }
 ) {
   try {
-    const { code } = args;
+    const { icao } = args;
 
-    // Validate airline code
-    if (!code || (code.length !== 2 && code.length !== 3)) {
+    if (!icao || icao.length !== 3) {
       throw new ProtocolError(
         ProtocolErrorCode.InvalidParams,
-        'Invalid airline code. Must be a 2-letter IATA code or 3-letter ICAO code.'
+        'Invalid airline code. Must be a 3-letter ICAO code.'
       );
     }
 
-    // Get airline data
-    const airlineData = await apiClient.getAirlineData(code);
-
-    // Format the response
+    const airlineData = await apiClient.getAirlineInfo(icao);
     const formattedResponse = formatAirlineData(airlineData);
 
     return {
@@ -59,14 +64,13 @@ export async function getAirlineDataTool(
   }
 }
 
-function formatAirlineData(airline: AirlineData) {
+export function formatAirlineData(airline: AirlineInfo) {
   return {
     name: airline.name,
     codes: {
-      iata: airline.code.iata,
-      icao: airline.code.icao,
+      iata: airline.iata,
+      icao: airline.icao,
     },
-    country: airline.country,
     updated: new Date().toISOString(),
   };
 }

@@ -1,10 +1,11 @@
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
-import { FlightData, Flightradar24ApiClient } from '../api-client.js';
+import { Flightradar24ApiClient } from '../api-client.js';
+import { formatPosition } from '../tools/flight-data.js';
 
 export const zoneResourceTemplate = {
   uriTemplate: 'zone://{north}/{south}/{west}/{east}',
   name: 'Zone Flights',
-  description: 'Flights in a specified geographic zone',
+  description: 'Currently airborne flights in a specified geographic zone',
   mimeType: 'application/json',
 };
 
@@ -13,7 +14,6 @@ export async function getZoneResource(
   uri: string
 ): Promise<string> {
   try {
-    // Extract the zone bounds from the URI
     const match = uri.match(/^zone:\/\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)$/);
     if (!match) {
       throw new ProtocolError(
@@ -27,7 +27,6 @@ export async function getZoneResource(
     const west = parseFloat(decodeURIComponent(match[3]));
     const east = parseFloat(decodeURIComponent(match[4]));
 
-    // Validate bounds
     if (isNaN(north) || isNaN(south) || isNaN(west) || isNaN(east)) {
       throw new ProtocolError(
         ProtocolErrorCode.InvalidParams,
@@ -63,21 +62,15 @@ export async function getZoneResource(
       );
     }
 
-    // Get flights in zone
-    const flights = await apiClient.getFlightsInZone({ north, south, west, east });
-
-    // Format the response
-    const formattedFlights = flights.map(flight => formatFlightData(flight));
+    const positions = await apiClient.getLiveFlightPositionsFull({
+      bounds: `${north},${south},${west},${east}`,
+      limit: 50,
+    });
 
     const formattedResponse = {
-      zone: {
-        north,
-        south,
-        west,
-        east,
-      },
-      flights: formattedFlights,
-      count: formattedFlights.length,
+      zone: { north, south, west, east },
+      flights: positions.map(formatPosition),
+      count: positions.length,
       timestamp: new Date().toISOString(),
     };
 
@@ -92,29 +85,4 @@ export async function getZoneResource(
       `Error retrieving zone resource: ${(error as Error).message}`
     );
   }
-}
-
-function formatFlightData(flight: FlightData) {
-  return {
-    flight_id: flight.flight,
-    callsign: flight.callsign,
-    airline: flight.airline,
-    position: {
-      latitude: flight.lat,
-      longitude: flight.lng,
-      altitude: flight.alt,
-    },
-    speed: flight.speed,
-    heading: flight.heading,
-    aircraft: {
-      type: flight.aircraft,
-      registration: flight.registration,
-    },
-    route: {
-      origin: flight.origin,
-      destination: flight.destination,
-    },
-    status: flight.status,
-    timestamp: new Date(flight.time * 1000).toISOString(),
-  };
 }

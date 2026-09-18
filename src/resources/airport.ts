@@ -1,10 +1,11 @@
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { Flightradar24ApiClient } from '../api-client.js';
+import { formatAirportData } from '../tools/airport-data.js';
 
 export const airportResourceTemplate = {
   uriTemplate: 'airport://{code}',
   name: 'Airport Information',
-  description: 'Information about an airport by IATA or ICAO code',
+  description: 'Information about an airport by exact IATA or ICAO code',
   mimeType: 'application/json',
 };
 
@@ -13,7 +14,6 @@ export async function getAirportResource(
   uri: string
 ): Promise<string> {
   try {
-    // Extract the airport code from the URI
     const match = uri.match(/^airport:\/\/([A-Za-z0-9]+)$/);
     if (!match) {
       throw new ProtocolError(
@@ -24,7 +24,6 @@ export async function getAirportResource(
 
     const airportCode = match[1];
 
-    // Validate airport code
     if (!airportCode || (airportCode.length !== 3 && airportCode.length !== 4)) {
       throw new ProtocolError(
         ProtocolErrorCode.InvalidParams,
@@ -32,24 +31,8 @@ export async function getAirportResource(
       );
     }
 
-    // Get airport data
-    const airportData = await apiClient.getAirportData(airportCode);
-
-    // Format the response
-    const formattedResponse = {
-      name: airportData.name,
-      codes: {
-        iata: airportData.iata,
-        icao: airportData.icao,
-      },
-      location: {
-        latitude: airportData.lat,
-        longitude: airportData.lng,
-        altitude: airportData.alt,
-        country: airportData.country,
-      },
-      updated: new Date().toISOString(),
-    };
+    const airportData = await apiClient.getAirportInfo(airportCode, 'full');
+    const formattedResponse = formatAirportData(airportData);
 
     return JSON.stringify(formattedResponse, null, 2);
   } catch (error) {

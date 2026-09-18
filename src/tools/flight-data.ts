@@ -1,67 +1,100 @@
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
-import { Flightradar24ApiClient, FlightDetails } from '../api-client.js';
+import { Flightradar24ApiClient, FlightPositionFull, FlightPositionLight } from '../api-client.js';
 
+// Judgment call: the legacy `/flight/info` endpoint (scheduled + real + estimated
+// times, plus a position "trail") does not exist in the real FR24 API. The closest
+// real equivalent for "real-time data for a specific flight" is the Live Flight
+// Positions endpoint filtered down to that one flight. This only returns data
+// while the flight is actually airborne and being tracked; for completed or
+// future flights, use get_flight_summary instead.
 export const getFlightDataToolSchema = {
   name: 'get_flight_data',
-  description: 'Get real-time data for a specific flight by flight number',
+  description:
+    'Get real-time position data for a specific flight that is currently airborne, by flight number or callsign. ' +
+    'Uses the FR24 live flight positions endpoint, so it only returns a result while the flight is in the air. ' +
+    'For completed, scheduled, or historical flights, use get_flight_summary instead.',
   inputSchema: {
     type: 'object',
     properties: {
-      flight_iata: {
+      flight_number: {
         type: 'string',
-        description: 'IATA flight code (e.g., \'BA123\')',
+        description: 'IATA or ICAO flight number (e.g., \'BA123\' or \'BAW123\').',
       },
-      flight_icao: {
+      callsign: {
         type: 'string',
-        description: 'ICAO flight code (e.g., \'BAW123\')',
+        description: 'ATC callsign of the flight (e.g., \'BAW123\'), used instead of flight_number.',
+      },
+      detail_level: {
+        type: 'string',
+        enum: ['light', 'full'],
+        description: 'Amount of detail to return. "full" (default) includes route, registration, and aircraft type; "light" returns only position data and costs fewer FR24 API credits.',
       },
     },
     oneOf: [
-      { required: ['flight_iata'] },
-      { required: ['flight_icao'] },
+      { required: ['flight_number'] },
+      { required: ['callsign'] },
     ],
+  },
+  annotations: {
+    readOnlyHint: true,
+    openWorldHint: true,
   },
 };
 
 export async function getFlightDataTool(
   apiClient: Flightradar24ApiClient,
   args: {
-    flight_iata?: string;
-    flight_icao?: string;
+    flight_number?: string;
+    callsign?: string;
+    detail_level?: 'light' | 'full';
   }
 ) {
   try {
-    const { flight_iata, flight_icao } = args;
+    const { flight_number, callsign } = args;
 
-    // Validate that at least one parameter is provided
-    if (!flight_iata && !flight_icao) {
+    if (!flight_number && !callsign) {
       throw new ProtocolError(
         ProtocolErrorCode.InvalidParams,
-        'Either flight_iata or flight_icao must be provided.'
+        'Either flight_number or callsign must be provided.'
       );
     }
 
-    // Use the appropriate flight identifier
-    const flightId = flight_icao || flight_iata;
+    const detailLevel = args.detail_level || 'full';
+    const filterParams = {
+      flights: flight_number,
+      callsigns: callsign,
+    };
 
-    if (!flightId) {
-      throw new ProtocolError(
-        ProtocolErrorCode.InvalidParams,
-        'Flight identifier is missing or invalid.'
-      );
+    const positions = detailLevel === 'full'
+      ? await apiClient.getLiveFlightPositionsFull(filterParams)
+      : await apiClient.getLiveFlightPositionsLight(filterParams);
+
+    if (!positions || positions.length === 0) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              query: { flight_number, callsign },
+              flights: [],
+              message: 'No currently airborne flight matched this query. The flight may not have departed yet, may have already landed, or the identifier may be incorrect. Try get_flight_summary for completed or historical flights.',
+              timestamp: new Date().toISOString(),
+            }, null, 2),
+          },
+        ],
+      };
     }
-
-    // Get flight data
-    const flightData = await apiClient.getFlightData(flightId);
-
-    // Format the response
-    const formattedResponse = formatFlightData(flightData);
 
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(formattedResponse, null, 2),
+          text: JSON.stringify({
+            query: { flight_number, callsign },
+            flights: positions.map(formatPosition),
+            count: positions.length,
+            timestamp: new Date().toISOString(),
+          }, null, 2),
         },
       ],
     };
@@ -77,86 +110,30 @@ export async function getFlightDataTool(
   }
 }
 
-function formatFlightData(flightData: FlightDetails) {
-  // Convert timestamps to ISO strings
-  const scheduledDeparture = flightData.time.scheduled.departure ?
-    new Date(flightData.time.scheduled.departure * 1000).toISOString() : null;
-  const scheduledArrival = flightData.time.scheduled.arrival ?
-    new Date(flightData.time.scheduled.arrival * 1000).toISOString() : null;
-  const actualDeparture = flightData.time.real.departure ?
-    new Date(flightData.time.real.departure * 1000).toISOString() : null;
-  const actualArrival = flightData.time.real.arrival ?
-    new Date(flightData.time.real.arrival * 1000).toISOString() : null;
-  const estimatedDeparture = flightData.time.estimated.departure ?
-    new Date(flightData.time.estimated.departure * 1000).toISOString() : null;
-  const estimatedArrival = flightData.time.estimated.arrival ?
-    new Date(flightData.time.estimated.arrival * 1000).toISOString() : null;
-
+export function formatPosition(position: FlightPositionLight | FlightPositionFull) {
+  const full = position as FlightPositionFull;
   return {
-    flight: {
-      id: flightData.identification.id,
-      callsign: flightData.identification.callsign,
-      number: flightData.identification.number.default,
-      alternative_number: flightData.identification.number.alternative,
+    fr24_id: position.fr24_id,
+    hex: position.hex,
+    callsign: position.callsign,
+    flight_number: full.flight,
+    position: {
+      latitude: position.lat,
+      longitude: position.lon,
+      altitude_ft: position.alt,
+      track_deg: position.track,
     },
-    status: {
-      live: flightData.status.live,
-      text: flightData.status.text,
-    },
-    aircraft: {
-      model: flightData.aircraft.model.text,
-      code: flightData.aircraft.model.code,
-      registration: flightData.aircraft.registration,
-    },
-    airline: {
-      name: flightData.airline.name,
-      iata: flightData.airline.code.iata,
-      icao: flightData.airline.code.icao,
-    },
-    origin: {
-      name: flightData.airport.origin.name,
-      iata: flightData.airport.origin.code.iata,
-      icao: flightData.airport.origin.code.icao,
-      city: flightData.airport.origin.position.region.city,
-      country: flightData.airport.origin.position.country.name,
-      coordinates: {
-        latitude: flightData.airport.origin.position.latitude,
-        longitude: flightData.airport.origin.position.longitude,
-      },
-    },
-    destination: {
-      name: flightData.airport.destination.name,
-      iata: flightData.airport.destination.code.iata,
-      icao: flightData.airport.destination.code.icao,
-      city: flightData.airport.destination.position.region.city,
-      country: flightData.airport.destination.position.country.name,
-      coordinates: {
-        latitude: flightData.airport.destination.position.latitude,
-        longitude: flightData.airport.destination.position.longitude,
-      },
-    },
-    time: {
-      scheduled: {
-        departure: scheduledDeparture,
-        arrival: scheduledArrival,
-      },
-      actual: {
-        departure: actualDeparture,
-        arrival: actualArrival,
-      },
-      estimated: {
-        departure: estimatedDeparture,
-        arrival: estimatedArrival,
-      },
-    },
-    trail: flightData.trail ? flightData.trail.map(point => ({
-      latitude: point.lat,
-      longitude: point.lng,
-      altitude: point.alt,
-      speed: point.spd,
-      heading: point.hd,
-      timestamp: new Date(point.ts * 1000).toISOString(),
-    })) : [],
-    updated: new Date().toISOString(),
+    ground_speed_kt: position.gspeed,
+    vertical_speed_fpm: position.vspeed,
+    squawk: position.squawk,
+    source: position.source,
+    aircraft_type: full.type,
+    registration: full.reg,
+    painted_as: full.painted_as,
+    operating_as: full.operating_as,
+    origin: full.orig_iata ? { iata: full.orig_iata, icao: full.orig_icao } : undefined,
+    destination: full.dest_iata ? { iata: full.dest_iata, icao: full.dest_icao } : undefined,
+    eta: full.eta,
+    timestamp: position.timestamp,
   };
 }

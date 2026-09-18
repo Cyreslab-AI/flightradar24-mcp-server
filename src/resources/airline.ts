@@ -1,10 +1,11 @@
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { Flightradar24ApiClient } from '../api-client.js';
+import { formatAirlineData } from '../tools/airline-data.js';
 
 export const airlineResourceTemplate = {
-  uriTemplate: 'airline://{code}',
+  uriTemplate: 'airline://{icao}',
   name: 'Airline Information',
-  description: 'Information about an airline by IATA or ICAO code',
+  description: 'Information about an airline by ICAO code',
   mimeType: 'application/json',
 };
 
@@ -13,7 +14,6 @@ export async function getAirlineResource(
   uri: string
 ): Promise<string> {
   try {
-    // Extract the airline code from the URI
     const match = uri.match(/^airline:\/\/([A-Za-z0-9]+)$/);
     if (!match) {
       throw new ProtocolError(
@@ -22,29 +22,17 @@ export async function getAirlineResource(
       );
     }
 
-    const airlineCode = match[1];
+    const airlineIcao = match[1];
 
-    // Validate airline code
-    if (!airlineCode || (airlineCode.length !== 2 && airlineCode.length !== 3)) {
+    if (!airlineIcao || airlineIcao.length !== 3) {
       throw new ProtocolError(
         ProtocolErrorCode.InvalidParams,
-        'Invalid airline code. Must be a 2-letter IATA code or 3-letter ICAO code.'
+        'Invalid airline code. Must be a 3-letter ICAO code.'
       );
     }
 
-    // Get airline data
-    const airlineData = await apiClient.getAirlineData(airlineCode);
-
-    // Format the response
-    const formattedResponse = {
-      name: airlineData.name,
-      codes: {
-        iata: airlineData.code.iata,
-        icao: airlineData.code.icao,
-      },
-      country: airlineData.country,
-      updated: new Date().toISOString(),
-    };
+    const airlineData = await apiClient.getAirlineInfo(airlineIcao);
+    const formattedResponse = formatAirlineData(airlineData);
 
     return JSON.stringify(formattedResponse, null, 2);
   } catch (error) {

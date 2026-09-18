@@ -1,153 +1,135 @@
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
-import { FlightData, FlightSearchParams, Flightradar24ApiClient } from '../api-client.js';
+import { Flightradar24ApiClient, FlightPositionFilterParams } from '../api-client.js';
+import { formatPosition } from './flight-data.js';
 
+// Judgment call: the real FR24 API has no airline-IATA or free-text search.
+// `operating_as`/`painted_as`/`aircraft` filters take ICAO codes only, so
+// airline_iata support from the legacy tool has been dropped; airline_icao is
+// the real, working equivalent. Registration/aircraft/route/bounds all map
+// directly onto real Live Flight Positions filter parameters.
 export const searchFlightsToolSchema = {
   name: 'search_flights',
-  description: 'Search for flights by various criteria',
+  description:
+    'Search for currently airborne flights using the FR24 live flight positions endpoint. At least one filter ' +
+    '(besides limit and detail_level) must be provided.',
   inputSchema: {
     type: 'object',
     properties: {
-      airline_iata: {
-        type: 'string',
-        description: 'IATA airline code (e.g., \'BA\' for British Airways)',
-      },
       airline_icao: {
         type: 'string',
-        description: 'ICAO airline code (e.g., \'BAW\' for British Airways)',
-      },
-      flight_number: {
-        type: 'string',
-        description: 'Flight number (e.g., \'123\')',
-      },
-      flight_iata: {
-        type: 'string',
-        description: 'IATA flight code (e.g., \'BA123\')',
-      },
-      flight_icao: {
-        type: 'string',
-        description: 'ICAO flight code (e.g., \'BAW123\')',
+        description: 'ICAO airline code the aircraft is operating as (e.g., \'BAW\' for British Airways). IATA airline codes are not supported by the FR24 API for this filter.',
       },
       registration: {
         type: 'string',
-        description: 'Aircraft registration (e.g., \'G-EUPT\')',
+        description: 'Aircraft registration(s), comma-separated (e.g., \'G-EUPT\'). Max 15.',
+      },
+      aircraft_type: {
+        type: 'string',
+        description: 'ICAO aircraft type code(s), comma-separated (e.g., \'A320\'). Max 15.',
+      },
+      route: {
+        type: 'string',
+        description: 'Route(s) between airports or countries, comma-separated (e.g., \'JFK-LAX\'). Max 15.',
+      },
+      altitude_range: {
+        type: 'string',
+        description: 'Altitude range(s) in feet (e.g., \'0-3000\' or \'0-3000,30000-40000\').',
       },
       bounds: {
         type: 'object',
         description: 'Geographic bounds to search within',
         properties: {
-          north: {
-            type: 'number',
-            description: 'Northern latitude bound',
-            minimum: -90,
-            maximum: 90,
-          },
-          south: {
-            type: 'number',
-            description: 'Southern latitude bound',
-            minimum: -90,
-            maximum: 90,
-          },
-          west: {
-            type: 'number',
-            description: 'Western longitude bound',
-            minimum: -180,
-            maximum: 180,
-          },
-          east: {
-            type: 'number',
-            description: 'Eastern longitude bound',
-            minimum: -180,
-            maximum: 180,
-          },
+          north: { type: 'number', description: 'Northern latitude bound', minimum: -90, maximum: 90 },
+          south: { type: 'number', description: 'Southern latitude bound', minimum: -90, maximum: 90 },
+          west: { type: 'number', description: 'Western longitude bound', minimum: -180, maximum: 180 },
+          east: { type: 'number', description: 'Eastern longitude bound', minimum: -180, maximum: 180 },
         },
         required: ['north', 'south', 'west', 'east'],
       },
+      detail_level: {
+        type: 'string',
+        enum: ['light', 'full'],
+        description: 'Amount of detail to return. "full" (default) includes route, registration, and aircraft type; "light" returns only position data and costs fewer FR24 API credits.',
+      },
       limit: {
         type: 'number',
-        description: 'Maximum number of results to return (default: 10, max: 100)',
+        description: 'Maximum number of results to return (default: 10, max: 30000).',
         minimum: 1,
-        maximum: 100,
+        maximum: 30000,
       },
     },
+  },
+  annotations: {
+    readOnlyHint: true,
+    openWorldHint: true,
   },
 };
 
 export async function searchFlightsTool(
   apiClient: Flightradar24ApiClient,
   args: {
-    airline_iata?: string;
     airline_icao?: string;
-    flight_number?: string;
-    flight_iata?: string;
-    flight_icao?: string;
     registration?: string;
-    bounds?: {
-      north: number;
-      south: number;
-      west: number;
-      east: number;
-    };
+    aircraft_type?: string;
+    route?: string;
+    altitude_range?: string;
+    bounds?: { north: number; south: number; west: number; east: number };
+    detail_level?: 'light' | 'full';
     limit?: number;
   }
 ) {
   try {
-    // Validate that at least one search parameter is provided
     if (
-      !args.airline_iata &&
       !args.airline_icao &&
-      !args.flight_number &&
-      !args.flight_iata &&
-      !args.flight_icao &&
       !args.registration &&
+      !args.aircraft_type &&
+      !args.route &&
+      !args.altitude_range &&
       !args.bounds
     ) {
       throw new ProtocolError(
         ProtocolErrorCode.InvalidParams,
-        'At least one search parameter must be provided.'
+        'At least one search parameter must be provided (airline_icao, registration, aircraft_type, route, altitude_range, or bounds).'
       );
     }
 
-    // Validate bounds if provided
     if (args.bounds) {
       const { north, south, west, east } = args.bounds;
-
       if (north < south) {
-        throw new ProtocolError(
-          ProtocolErrorCode.InvalidParams,
-          'Northern latitude must be greater than or equal to southern latitude.'
-        );
+        throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'Northern latitude must be greater than or equal to southern latitude.');
       }
-
       if (east < west) {
-        throw new ProtocolError(
-          ProtocolErrorCode.InvalidParams,
-          'Eastern longitude must be greater than or equal to western longitude.'
-        );
+        throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'Eastern longitude must be greater than or equal to western longitude.');
       }
     }
 
-    // Set default limit if not provided
+    const detailLevel = args.detail_level || 'full';
     const limit = args.limit || 10;
 
-    // Prepare search parameters
-    const searchParams: FlightSearchParams = {
-      ...args,
+    const filterParams: FlightPositionFilterParams = {
+      operating_as: args.airline_icao,
+      registrations: args.registration,
+      aircraft: args.aircraft_type,
+      routes: args.route,
+      altitude_ranges: args.altitude_range,
+      bounds: args.bounds ? `${args.bounds.north},${args.bounds.south},${args.bounds.west},${args.bounds.east}` : undefined,
       limit,
     };
 
-    // Search for flights
-    const flights = await apiClient.searchFlights(searchParams);
+    const positions = detailLevel === 'full'
+      ? await apiClient.getLiveFlightPositionsFull(filterParams)
+      : await apiClient.getLiveFlightPositionsLight(filterParams);
 
-    if (!flights || flights.length === 0) {
+    if (!positions || positions.length === 0) {
       return {
         content: [
           {
             type: 'text',
             text: JSON.stringify({
-              search_params: searchParams,
+              search_params: args,
               flights: [],
               count: 0,
-              message: 'No flights found matching the search criteria.',
+              message: 'No currently airborne flights matched the search criteria.',
               timestamp: new Date().toISOString(),
             }, null, 2),
           },
@@ -155,17 +137,14 @@ export async function searchFlightsTool(
       };
     }
 
-    // Format the response
-    const formattedFlights = flights.map(flight => formatFlightData(flight));
-
     return {
       content: [
         {
           type: 'text',
           text: JSON.stringify({
-            search_params: searchParams,
-            flights: formattedFlights,
-            count: formattedFlights.length,
+            search_params: args,
+            flights: positions.map(formatPosition),
+            count: positions.length,
             timestamp: new Date().toISOString(),
           }, null, 2),
         },
@@ -181,29 +160,4 @@ export async function searchFlightsTool(
       `Error searching for flights: ${(error as Error).message}`
     );
   }
-}
-
-function formatFlightData(flight: FlightData) {
-  return {
-    flight_id: flight.flight,
-    callsign: flight.callsign,
-    airline: flight.airline,
-    position: {
-      latitude: flight.lat,
-      longitude: flight.lng,
-      altitude: flight.alt,
-    },
-    speed: flight.speed,
-    heading: flight.heading,
-    aircraft: {
-      type: flight.aircraft,
-      registration: flight.registration,
-    },
-    route: {
-      origin: flight.origin,
-      destination: flight.destination,
-    },
-    status: flight.status,
-    timestamp: new Date(flight.time * 1000).toISOString(),
-  };
 }

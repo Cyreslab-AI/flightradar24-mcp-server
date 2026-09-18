@@ -4,14 +4,16 @@ import { Server, ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/
 import { Flightradar24ApiClient } from './api-client.js';
 import { getFlightDataTool, getFlightDataToolSchema } from './tools/flight-data.js';
 import { searchFlightsTool, searchFlightsToolSchema } from './tools/flight-search.js';
-import { getAirportDataTool, getAirportDataToolSchema, searchAirportsTool, searchAirportsToolSchema } from './tools/airport-data.js';
+import { getFlightSummaryTool, getFlightSummaryToolSchema } from './tools/flight-summary.js';
+import { getFlightTracksTool, getFlightTracksToolSchema } from './tools/flight-tracks.js';
+import { getAirportDataTool, getAirportDataToolSchema } from './tools/airport-data.js';
 import { getAirlineDataTool, getAirlineDataToolSchema } from './tools/airline-data.js';
-import { getAircraftDataTool, getAircraftDataToolSchema } from './tools/aircraft-data.js';
 import { getFlightsInZoneTool, getFlightsInZoneToolSchema } from './tools/zone-search.js';
+import { getApiUsageTool, getApiUsageToolSchema } from './tools/api-usage.js';
 import { getFlightResource, flightResourceTemplate } from './resources/flight.js';
 import { getAirportResource, airportResourceTemplate } from './resources/airport.js';
 import { getAirlineResource, airlineResourceTemplate } from './resources/airline.js';
-import { getAircraftResource, aircraftResourceTemplate } from './resources/aircraft.js';
+import { getFlightTrackResource, flightTrackResourceTemplate } from './resources/flight-track.js';
 import { getZoneResource, zoneResourceTemplate } from './resources/zone.js';
 
 class Flightradar24Server {
@@ -22,7 +24,7 @@ class Flightradar24Server {
     this.server = new Server(
       {
         name: 'flightradar24-server',
-        version: '1.0.0',
+        version: '2.0.0',
       },
       {
         capabilities: {
@@ -44,11 +46,11 @@ class Flightradar24Server {
 
   private getApiClient(): Flightradar24ApiClient {
     if (!this.apiClient) {
-      const apiKey = process.env.FLIGHTRADAR24_API_KEY;
+      const apiKey = process.env.FR24_API_KEY;
       if (!apiKey) {
         throw new ProtocolError(
           ProtocolErrorCode.InvalidRequest,
-          'FLIGHTRADAR24_API_KEY environment variable is required'
+          'FR24_API_KEY environment variable is required. Get a key at https://fr24api.flightradar24.com'
         );
       }
       this.apiClient = new Flightradar24ApiClient(apiKey);
@@ -62,11 +64,12 @@ class Flightradar24Server {
       tools: [
         getFlightDataToolSchema,
         searchFlightsToolSchema,
+        getFlightSummaryToolSchema,
+        getFlightTracksToolSchema,
         getAirportDataToolSchema,
-        searchAirportsToolSchema,
         getAirlineDataToolSchema,
-        getAircraftDataToolSchema,
         getFlightsInZoneToolSchema,
+        getApiUsageToolSchema,
       ],
     }));
 
@@ -81,20 +84,23 @@ class Flightradar24Server {
         case 'search_flights':
           return searchFlightsTool(apiClient, request.params.arguments as any);
 
+        case 'get_flight_summary':
+          return getFlightSummaryTool(apiClient, request.params.arguments as any);
+
+        case 'get_flight_tracks':
+          return getFlightTracksTool(apiClient, request.params.arguments as any);
+
         case 'get_airport_data':
           return getAirportDataTool(apiClient, request.params.arguments as any);
-
-        case 'search_airports':
-          return searchAirportsTool(apiClient, request.params.arguments as any);
 
         case 'get_airline_data':
           return getAirlineDataTool(apiClient, request.params.arguments as any);
 
-        case 'get_aircraft_data':
-          return getAircraftDataTool(apiClient, request.params.arguments as any);
-
         case 'get_flights_in_zone':
           return getFlightsInZoneTool(apiClient, request.params.arguments as any);
+
+        case 'get_api_usage':
+          return getApiUsageTool(apiClient);
 
         default:
           throw new ProtocolError(
@@ -110,7 +116,7 @@ class Flightradar24Server {
         flightResourceTemplate,
         airportResourceTemplate,
         airlineResourceTemplate,
-        aircraftResourceTemplate,
+        flightTrackResourceTemplate,
         zoneResourceTemplate,
       ],
     }));
@@ -133,8 +139,8 @@ class Flightradar24Server {
         content = await getAirportResource(apiClient, uri);
       } else if (uri.startsWith('airline://')) {
         content = await getAirlineResource(apiClient, uri);
-      } else if (uri.startsWith('aircraft://')) {
-        content = await getAircraftResource(apiClient, uri);
+      } else if (uri.startsWith('flighttrack://')) {
+        content = await getFlightTrackResource(apiClient, uri);
       } else if (uri.startsWith('zone://')) {
         content = await getZoneResource(apiClient, uri);
       } else {

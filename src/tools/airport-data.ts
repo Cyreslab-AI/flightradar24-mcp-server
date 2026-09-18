@@ -1,9 +1,15 @@
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
-import { AirportData, AirportSearchParams, Flightradar24ApiClient } from '../api-client.js';
+import { AirportInfoFull, AirportInfoLight, Flightradar24ApiClient } from '../api-client.js';
 
+// Judgment call: the real FR24 API only supports exact-code airport lookup
+// (`/static/airports/{code}/light|full`) — there is no name/country/free-text
+// search. The old `search_airports` tool promised fuzzy, multi-result search
+// that the real API cannot deliver, so per the "don't fake it" instruction it
+// has been removed rather than re-implemented as a disguised exact lookup.
+// get_airport_data now covers the one real capability that exists.
 export const getAirportDataToolSchema = {
   name: 'get_airport_data',
-  description: 'Get detailed information about an airport by IATA or ICAO code',
+  description: 'Get information about an airport by its exact IATA or ICAO code.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -11,8 +17,17 @@ export const getAirportDataToolSchema = {
         type: 'string',
         description: 'IATA (3-letter) or ICAO (4-letter) airport code',
       },
+      detail_level: {
+        type: 'string',
+        enum: ['light', 'full'],
+        description: 'Amount of detail to return. "full" (default) includes coordinates, elevation, city, and timezone; "light" returns only name and codes and costs fewer FR24 API credits.',
+      },
     },
     required: ['code'],
+  },
+  annotations: {
+    readOnlyHint: true,
+    openWorldHint: true,
   },
 };
 
@@ -20,12 +35,12 @@ export async function getAirportDataTool(
   apiClient: Flightradar24ApiClient,
   args: {
     code: string;
+    detail_level?: 'light' | 'full';
   }
 ) {
   try {
     const { code } = args;
 
-    // Validate airport code
     if (!code || (code.length !== 3 && code.length !== 4)) {
       throw new ProtocolError(
         ProtocolErrorCode.InvalidParams,
@@ -33,10 +48,8 @@ export async function getAirportDataTool(
       );
     }
 
-    // Get airport data
-    const airportData = await apiClient.getAirportData(code);
-
-    // Format the response
+    const detailLevel = args.detail_level || 'full';
+    const airportData = await apiClient.getAirportInfo(code, detailLevel);
     const formattedResponse = formatAirportData(airportData);
 
     return {
@@ -59,126 +72,23 @@ export async function getAirportDataTool(
   }
 }
 
-export const searchAirportsToolSchema = {
-  name: 'search_airports',
-  description: 'Search for airports by name, country, or other criteria',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      name: {
-        type: 'string',
-        description: 'Airport name or partial name',
-      },
-      country: {
-        type: 'string',
-        description: 'Country name or code',
-      },
-      iata: {
-        type: 'string',
-        description: 'IATA airport code (3 letters)',
-      },
-      icao: {
-        type: 'string',
-        description: 'ICAO airport code (4 letters)',
-      },
-      limit: {
-        type: 'number',
-        description: 'Maximum number of results to return (default: 10, max: 100)',
-        minimum: 1,
-        maximum: 100,
-      },
-    },
-  },
-};
-
-export async function searchAirportsTool(
-  apiClient: Flightradar24ApiClient,
-  args: {
-    name?: string;
-    country?: string;
-    iata?: string;
-    icao?: string;
-    limit?: number;
-  }
-) {
-  try {
-    // Validate that at least one search parameter is provided
-    if (!args.name && !args.country && !args.iata && !args.icao) {
-      throw new ProtocolError(
-        ProtocolErrorCode.InvalidParams,
-        'At least one search parameter must be provided.'
-      );
-    }
-
-    // Set default limit if not provided
-    const limit = args.limit || 10;
-
-    // Prepare search parameters
-    const searchParams: AirportSearchParams = {
-      ...args,
-      limit,
-    };
-
-    // Search for airports
-    const airports = await apiClient.searchAirports(searchParams);
-
-    if (!airports || airports.length === 0) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              search_params: searchParams,
-              airports: [],
-              count: 0,
-              message: 'No airports found matching the search criteria.',
-              timestamp: new Date().toISOString(),
-            }, null, 2),
-          },
-        ],
-      };
-    }
-
-    // Format the response
-    const formattedAirports = airports.map(airport => formatAirportData(airport));
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            search_params: searchParams,
-            airports: formattedAirports,
-            count: formattedAirports.length,
-            timestamp: new Date().toISOString(),
-          }, null, 2),
-        },
-      ],
-    };
-  } catch (error) {
-    if (error instanceof ProtocolError) {
-      throw error;
-    }
-
-    throw new ProtocolError(
-      ProtocolErrorCode.InternalError,
-      `Error searching for airports: ${(error as Error).message}`
-    );
-  }
-}
-
-function formatAirportData(airport: AirportData) {
+export function formatAirportData(airport: AirportInfoLight | AirportInfoFull) {
+  const full = airport as AirportInfoFull;
   return {
     name: airport.name,
     codes: {
       iata: airport.iata,
       icao: airport.icao,
     },
-    location: {
-      latitude: airport.lat,
-      longitude: airport.lng,
-      altitude: airport.alt,
-      country: airport.country,
-    },
+    location: full.lat !== undefined ? {
+      latitude: full.lat,
+      longitude: full.lon,
+      elevation_ft: full.elevation,
+      city: full.city,
+      state: full.state,
+      country: full.country,
+    } : undefined,
+    timezone: full.timezone,
+    updated: new Date().toISOString(),
   };
 }

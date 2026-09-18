@@ -1,7 +1,7 @@
 {
   "name": "flightradar24-server",
-  "version": "1.0.0",
-  "description": "MCP server for Flightradar24 flight tracking",
+  "version": "2.0.0",
+  "description": "MCP server for the official Flightradar24 API (fr24api.flightradar24.com)",
   "main": "build/index.js",
   "type": "module",
   "scripts": {
