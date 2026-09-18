@@ -35,6 +35,17 @@ export const getFlightDataToolSchema = {
       { required: ['callsign'] },
     ],
   },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      query: { type: 'object' },
+      flights: { type: 'array', items: { type: 'object' } },
+      count: { type: 'number' },
+      message: { type: 'string' },
+      timestamp: { type: 'string' },
+    },
+    required: ['query', 'flights', 'timestamp'],
+  },
   annotations: {
     readOnlyHint: true,
     openWorldHint: true,
@@ -70,33 +81,39 @@ export async function getFlightDataTool(
       : await apiClient.getLiveFlightPositionsLight(filterParams);
 
     if (!positions || positions.length === 0) {
+      const result = {
+        query: { flight_number, callsign },
+        flights: [],
+        message: 'No currently airborne flight matched this query. The flight may not have departed yet, may have already landed, or the identifier may be incorrect. Try get_flight_summary for completed or historical flights.',
+        timestamp: new Date().toISOString(),
+      };
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({
-              query: { flight_number, callsign },
-              flights: [],
-              message: 'No currently airborne flight matched this query. The flight may not have departed yet, may have already landed, or the identifier may be incorrect. Try get_flight_summary for completed or historical flights.',
-              timestamp: new Date().toISOString(),
-            }, null, 2),
+            text: JSON.stringify(result, null, 2),
           },
         ],
+        structuredContent: result,
       };
     }
+
+    const result = {
+      query: { flight_number, callsign },
+      flights: positions.map(formatPosition),
+      count: positions.length,
+      timestamp: new Date().toISOString(),
+    };
 
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify({
-            query: { flight_number, callsign },
-            flights: positions.map(formatPosition),
-            count: positions.length,
-            timestamp: new Date().toISOString(),
-          }, null, 2),
+          text: JSON.stringify(result, null, 2),
         },
       ],
+      structuredContent: result,
     };
   } catch (error) {
     if (error instanceof ProtocolError) {

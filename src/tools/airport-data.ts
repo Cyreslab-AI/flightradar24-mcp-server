@@ -25,6 +25,33 @@ export const getAirportDataToolSchema = {
     },
     required: ['code'],
   },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string' },
+      codes: {
+        type: 'object',
+        properties: {
+          iata: { type: 'string' },
+          icao: { type: 'string' },
+        },
+      },
+      location: {
+        type: 'object',
+        properties: {
+          latitude: { type: 'number' },
+          longitude: { type: 'number' },
+          elevation_ft: { type: 'number' },
+          city: { type: 'string' },
+          state: { type: ['string', 'null'] },
+          country: { type: 'object' },
+        },
+      },
+      timezone: { type: 'object' },
+      updated: { type: 'string' },
+    },
+    required: ['name', 'codes', 'updated'],
+  },
   annotations: {
     readOnlyHint: true,
     openWorldHint: true,
@@ -59,6 +86,7 @@ export async function getAirportDataTool(
           text: JSON.stringify(formattedResponse, null, 2),
         },
       ],
+      structuredContent: formattedResponse,
     };
   } catch (error) {
     if (error instanceof ProtocolError) {

@@ -59,6 +59,17 @@ export const searchFlightsToolSchema = {
       },
     },
   },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      search_params: { type: 'object' },
+      flights: { type: 'array', items: { type: 'object' } },
+      count: { type: 'number' },
+      message: { type: 'string' },
+      timestamp: { type: 'string' },
+    },
+    required: ['search_params', 'flights', 'count', 'timestamp'],
+  },
   annotations: {
     readOnlyHint: true,
     openWorldHint: true,
@@ -121,34 +132,40 @@ export async function searchFlightsTool(
       : await apiClient.getLiveFlightPositionsLight(filterParams);
 
     if (!positions || positions.length === 0) {
+      const result = {
+        search_params: args,
+        flights: [],
+        count: 0,
+        message: 'No currently airborne flights matched the search criteria.',
+        timestamp: new Date().toISOString(),
+      };
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({
-              search_params: args,
-              flights: [],
-              count: 0,
-              message: 'No currently airborne flights matched the search criteria.',
-              timestamp: new Date().toISOString(),
-            }, null, 2),
+            text: JSON.stringify(result, null, 2),
           },
         ],
+        structuredContent: result,
       };
     }
+
+    const result = {
+      search_params: args,
+      flights: positions.map(formatPosition),
+      count: positions.length,
+      timestamp: new Date().toISOString(),
+    };
 
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify({
-            search_params: args,
-            flights: positions.map(formatPosition),
-            count: positions.length,
-            timestamp: new Date().toISOString(),
-          }, null, 2),
+          text: JSON.stringify(result, null, 2),
         },
       ],
+      structuredContent: result,
     };
   } catch (error) {
     if (error instanceof ProtocolError) {

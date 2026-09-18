@@ -13,6 +13,24 @@ export const getApiUsageToolSchema = {
     type: 'object',
     properties: {},
   },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      usage: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            endpoint: { type: 'string' },
+            request_count: { type: 'number' },
+            credits: { type: 'number' },
+          },
+        },
+      },
+      timestamp: { type: 'string' },
+    },
+    required: ['usage', 'timestamp'],
+  },
   annotations: {
     readOnlyHint: true,
     openWorldHint: true,
@@ -23,16 +41,19 @@ export async function getApiUsageTool(apiClient: Flightradar24ApiClient) {
   try {
     const usage = await apiClient.getUsage();
 
+    const result = {
+      usage,
+      timestamp: new Date().toISOString(),
+    };
+
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify({
-            usage,
-            timestamp: new Date().toISOString(),
-          }, null, 2),
+          text: JSON.stringify(result, null, 2),
         },
       ],
+      structuredContent: result,
     };
   } catch (error) {
     if (error instanceof ProtocolError) {

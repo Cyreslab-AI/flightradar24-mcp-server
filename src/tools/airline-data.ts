@@ -19,6 +19,21 @@ export const getAirlineDataToolSchema = {
     },
     required: ['icao'],
   },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string' },
+      codes: {
+        type: 'object',
+        properties: {
+          iata: { type: 'string' },
+          icao: { type: 'string' },
+        },
+      },
+      updated: { type: 'string' },
+    },
+    required: ['name', 'codes', 'updated'],
+  },
   annotations: {
     readOnlyHint: true,
     openWorldHint: true,
@@ -51,6 +66,7 @@ export async function getAirlineDataTool(
           text: JSON.stringify(formattedResponse, null, 2),
         },
       ],
+      structuredContent: formattedResponse,
     };
   } catch (error) {
     if (error instanceof ProtocolError) {

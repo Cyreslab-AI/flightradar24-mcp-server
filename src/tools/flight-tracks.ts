@@ -25,6 +25,16 @@ export const getFlightTracksToolSchema = {
     },
     required: ['flight_id'],
   },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      flight_id: { type: 'string' },
+      tracks: { type: 'array', items: { type: 'object' } },
+      message: { type: 'string' },
+      timestamp: { type: 'string' },
+    },
+    required: ['flight_id', 'tracks', 'timestamp'],
+  },
   annotations: {
     readOnlyHint: true,
     openWorldHint: true,
@@ -47,18 +57,21 @@ export async function getFlightTracksTool(
     const results = await apiClient.getFlightTracks(flight_id);
 
     if (!results || results.length === 0) {
+      const result = {
+        flight_id,
+        tracks: [],
+        message: 'No track data found for this flight ID.',
+        timestamp: new Date().toISOString(),
+      };
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({
-              flight_id,
-              tracks: [],
-              message: 'No track data found for this flight ID.',
-              timestamp: new Date().toISOString(),
-            }, null, 2),
+            text: JSON.stringify(result, null, 2),
           },
         ],
+        structuredContent: result,
       };
     }
 
@@ -79,17 +92,20 @@ export async function getFlightTracksTool(
       point_count: result.tracks.length,
     }));
 
+    const result = {
+      flight_id,
+      tracks: formatted,
+      timestamp: new Date().toISOString(),
+    };
+
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify({
-            flight_id,
-            tracks: formatted,
-            timestamp: new Date().toISOString(),
-          }, null, 2),
+          text: JSON.stringify(result, null, 2),
         },
       ],
+      structuredContent: result,
     };
   } catch (error) {
     if (error instanceof ProtocolError) {

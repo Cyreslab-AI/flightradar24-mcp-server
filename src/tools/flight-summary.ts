@@ -58,6 +58,17 @@ export const getFlightSummaryToolSchema = {
     },
     required: ['flight_datetime_from', 'flight_datetime_to'],
   },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      query: { type: 'object' },
+      flights: { type: 'array', items: { type: 'object' } },
+      count: { type: 'number' },
+      message: { type: 'string' },
+      timestamp: { type: 'string' },
+    },
+    required: ['query', 'flights', 'count', 'timestamp'],
+  },
   annotations: {
     readOnlyHint: true,
     openWorldHint: true,
@@ -105,34 +116,40 @@ export async function getFlightSummaryTool(
       : await apiClient.getFlightSummaryLight(filterParams);
 
     if (!summaries || summaries.length === 0) {
+      const result = {
+        query: args,
+        flights: [],
+        count: 0,
+        message: 'No flights found matching the search criteria.',
+        timestamp: new Date().toISOString(),
+      };
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({
-              query: args,
-              flights: [],
-              count: 0,
-              message: 'No flights found matching the search criteria.',
-              timestamp: new Date().toISOString(),
-            }, null, 2),
+            text: JSON.stringify(result, null, 2),
           },
         ],
+        structuredContent: result,
       };
     }
+
+    const result = {
+      query: args,
+      flights: summaries.map(formatSummary),
+      count: summaries.length,
+      timestamp: new Date().toISOString(),
+    };
 
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify({
-            query: args,
-            flights: summaries.map(formatSummary),
-            count: summaries.length,
-            timestamp: new Date().toISOString(),
-          }, null, 2),
+          text: JSON.stringify(result, null, 2),
         },
       ],
+      structuredContent: result,
     };
   } catch (error) {
     if (error instanceof ProtocolError) {

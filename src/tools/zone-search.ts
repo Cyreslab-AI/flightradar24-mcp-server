@@ -49,6 +49,25 @@ export const getFlightsInZoneToolSchema = {
     },
     required: ['north', 'south', 'west', 'east'],
   },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      zone: {
+        type: 'object',
+        properties: {
+          north: { type: 'number' },
+          south: { type: 'number' },
+          west: { type: 'number' },
+          east: { type: 'number' },
+        },
+      },
+      flights: { type: 'array', items: { type: 'object' } },
+      count: { type: 'number' },
+      message: { type: 'string' },
+      timestamp: { type: 'string' },
+    },
+    required: ['zone', 'flights', 'count', 'timestamp'],
+  },
   annotations: {
     readOnlyHint: true,
     openWorldHint: true,
@@ -94,34 +113,40 @@ export async function getFlightsInZoneTool(
       : await apiClient.getLiveFlightPositionsLight(filterParams);
 
     if (!positions || positions.length === 0) {
+      const result = {
+        zone: { north, south, west, east },
+        flights: [],
+        count: 0,
+        message: 'No flights found in the specified zone.',
+        timestamp: new Date().toISOString(),
+      };
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({
-              zone: { north, south, west, east },
-              flights: [],
-              count: 0,
-              message: 'No flights found in the specified zone.',
-              timestamp: new Date().toISOString(),
-            }, null, 2),
+            text: JSON.stringify(result, null, 2),
           },
         ],
+        structuredContent: result,
       };
     }
+
+    const result = {
+      zone: { north, south, west, east },
+      flights: positions.map(formatPosition),
+      count: positions.length,
+      timestamp: new Date().toISOString(),
+    };
 
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify({
-            zone: { north, south, west, east },
-            flights: positions.map(formatPosition),
-            count: positions.length,
-            timestamp: new Date().toISOString(),
-          }, null, 2),
+          text: JSON.stringify(result, null, 2),
         },
       ],
+      structuredContent: result,
     };
   } catch (error) {
     if (error instanceof ProtocolError) {
